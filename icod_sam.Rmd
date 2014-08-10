@@ -56,11 +56,6 @@ tun   <- lapply(tun,function(idx) {
 ```
 
 # SAM assessment
-Note the *FLSAM* package is a forked one from *flr* to *einarhjorleifsson* on github. Hence to install the modified verssion one does:
-```{r, eval=FALSE}
-require(devtools)
-install_github("FLSAM","einarhjorleifsson")
-```
 
 ```{r, message=FALSE, warning=FALSE}
 library(FLSAM)
@@ -104,15 +99,14 @@ ctr@logN.vars[]      <- c(1,rep(2,dims(stk)$age-1))
 
 ## Assessment
 ```{r, eval=FALSE}
-sam   <-  FLSAM(stk,tun,ctr,run.dir = "run")
+# sam   <-  FLSAM(stk,tun,ctr,run.dir = "run")
 ```
 Note, if one is using the *flr FLSAM* repository, the above will give the following error (hence it is outcommented):
-In the above we get the following error (hence it is outcommented):
 ```
 Error in x@.Data[i, j, k, l, m, n] <- value : replacement has length zero
 Called from: `[<-`(`*tmp*`, a, , value = numeric(0))
 ```
-This occurs quite late in the function code within the *SAM2FLR*-function when reading the mortality output matrix. What could be done here is to split the *FLSAM* function into two pieces. Lets source them:
+This occurs quite late in the function code within the *SAM2FLR*-function when reading the mortality output matrix. What is done here is to split the *FLSAM* function into two pieces. Lets source them:
 ```{r}
 source("R/FLSAM_amended.R")
 ```
@@ -123,15 +117,6 @@ FLSAM_run(stk,tun,ctr,run.dir="run")
 Note that the run.dir needs to be specified in the function above.
 
 The second function reads the results back into the *FLR*-environment (using some quick fix):
-```{r}
-source("R/FLSAM_amended.R")
-```
-Run the actual assessment:
-```{r, eval=FALSE}
-FLSAM_run(stk,tun,ctr,run.dir="run")
-```
-
-Now we read the data back into the *FLR*-environment (using some quick fix):
 ```{r, warning=FALSE}
 sam <- SAM2FLR_fix(ctrl=ctr,run.dir="run")
 # note, here we loose the 2014 data
