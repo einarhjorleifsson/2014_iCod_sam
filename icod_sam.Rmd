@@ -1,0 +1,241 @@
+---
+title: 'iCod: Confrontation with sam'
+author: "Einar Hjörleifsson"
+date: "10/07/2014"
+output:
+  html_document:
+    fig_height: 7
+    fig_width: 9
+    number_sections: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# Input
+
+## File structure
+
+The input data are in Lowestoft format stored in the *data*-directory:
+```{r}
+dir("data")
+dir.data     <-  file.path("data")
+```
+
+
+## FLR objects
+
+Load the FLCore package
+```{r, message=FALSE, warning=FALSE}
+library(FLCore)
+```
+Read the input data into an *FLStock* object:
+```{r}
+stk <- readFLStock(file.path(dir.data, "index.txt"),no.discards=TRUE)
+units(stk)[1:17] <- as.list(c(rep(c("tonnes","thousands","kg"),4), "m","NA","f","NA","NA"))
+landings(stk)    <- landings(stk) * 1000
+landings.wt(stk) <- landings.wt(stk)/1000
+stock.wt(stk)    <- stock.wt(stk) / 1000
+stk@catch.n      <- stk@landings.n
+stk@catch        <- stk@landings
+stk@catch.wt     <- stk@landings.wt
+#Set fbar
+range(stk)[c("minfbar","maxfbar")] <- c(5,10)
+#Set plus group
+range(stk)[3] <- 0
+iCod.stk <- stk
+```
+Read the tuning data into an *FLIndices* object:
+```{r}
+tun   <- readFLIndices(file.path(dir.data, "fleet.txt"))
+tun   <- lapply(tun,function(idx) {
+                 idx@type        <- 	"number"
+          		    idx@index.var[]  <-	1
+                  #idx@range["plusgroup"] <- 10  ### NEED TO DOUBLE CHECK
+          		return(idx)})
+```
+
+# SAM assessment
+Note the *FLSAM* package is a forked one from *flr* to *einarhjorleifsson* on github. Hence to install the modified verssion one does:
+```{r, eval=FALSE}
+require(devtools)
+install_github("FLSAM","einarhjorleifsson")
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(FLSAM)
+```
+
+Firstly lets just use the time series since 1985 (start of the SMB survey):
+```{r}
+stk <- window(iCod.stk,start = 1985)
+```
+
+## Setup
+Setup an *FLSAM.control* object based on the FLStock and FLIndices objects suppplied:
+```{r}
+ctr <- FLSAM.control(stk,tun)
+```
+The above only sets up the structure, but all parameters are still "unset". Lets fill the stuff with something just to get us going:
+```{r}
+ctr@plus.group <- FALSE
+# Survey catchability
+ctr@catchabilities["SMB",]  <- c(1,2,3,4,5,6,7,8,8,8,NA,NA,NA,NA)
+# Survey power (Should only be up to age 5)
+ctr@power.law.exps["SMB",] <-  c(1,2,3,4,5,NA,NA,NA,NA,NA,NA,NA,NA,NA)
+
+# No fishing age 1 and 2:
+ctr@f.vars["catch",1:2] <- NA
+# Fishing mortality states: for ages 3:10 are free
+#  for 11:14 assume the same as age 10
+ctr@states["catch",] <- c(NA,NA,1:8,8,8,8,8)
+
+#Bind the observation variances
+ctr@obs.vars["catch",] <- c(NA,NA,1,2,2,2,2,2,2,3,3,3,3,3)
+ctr@obs.vars["SMB",]   <- c(rep(4,10),NA,NA,NA,NA)
+
+#Correlated Random walks for fishing mortalities - Default = FALSE = independent)
+ctr@cor.F <- FALSE
+
+#Set the variances. Separate variance for recruitment and plus group
+ctr@logN.vars[]      <- c(1,rep(2,dims(stk)$age-1))
+#ctr_trial01 <- ctr # a backup
+```
+
+## Assessment
+```{r, eval=FALSE}
+sam   <-  FLSAM(stk,tun,ctr,run.dir = "run")
+```
+
+Note, if one is using the *flr FLSAM* repository, the above will give the following error (hence it is outcommented):
+```
+Error in x@.Data[i, j, k, l, m, n] <- value : replacement has length zero
+Called from: `[<-`(`*tmp*`, a, , value = numeric(0))
+```
+This occurs quite late in the function code within the *SAM2FLR*-function when reading the mortality output matrix. What could be done here is to split the *FLSAM* function into two pieces. Lets source them:
+```{r}
+source("R/FLSAM_amended.R")
+```
+Here the FLSAM-function has been split into two sections. One that just does the run (no changes were made in the principle code):
+```{r, eval=FALSE}
+FLSAM_run(stk,tun,ctr,run.dir="run")
+```
+Note that the run.dir needs to be specified in the function above.
+
+The second function reads the results back into the *FLR*-environment (using some quick fix):
+```{r, warning=FALSE}
+sam <- SAM2FLR_fix(ctrl=ctr,run.dir="run")
+# note, here we loose the 2014 data
+ass <- stk + sam
+```
+
+Lets save the stuff as R-binary:
+```{r, eval=FALSE}
+save(stk,ctr,sam,ass,file="R/iCod_sam_assessment.RData")
+```
+
+## Diagnostics
+
+### Residuals
+```{r, warning=FALSE}
+res <- residuals(sam)
+ggplot(res,aes(year,std.res,fill=std.res>0)) + 
+  geom_bar(stat="identity") +
+  facet_grid(age ~ fleet) +
+  theme(legend.position="none") +
+  scale_fill_brewer(palette="Set1") +
+  labs(x="",y="")
+```
+
+### Observation variance
+```{r}
+obv <- obs.var(sam)
+ggplot(obv,aes(paste(fleet,age))) + 
+  geom_pointrange(aes(y=value,ymin=0,ymax=value)) +
+  labs(x="",y="") +
+  coord_flip()
+```
+
+```{r}
+otolith(sam,year=2014,plot=T,n=2000)
+```
+
+```{r}
+cor.plot(sam)
+```
+
+```{r}
+plot.dat <- catchabilities(sam)
+library(lattice)
+print(xyplot(value+ubnd+lbnd ~ age | fleet,
+data=plot.dat,subset=fleet %in% c("SMB"),
+scale=list(alternating=FALSE,y=list(relation="free")),as.table=TRUE,
+type="l",lwd=c(2,1,1),col=c("black","grey","grey"),
+main="SMB catchability parameters",
+ylab="Catchability",xlab="Age"))
+```
+
+
+```{r, eval=FALSE}
+residual.diagnostics(sam)
+```
+
+### Retro analysis
+
+This does not work:
+```{r, eval=FALSE}
+retro.sams <- retro(stk,tun,ctr,retro=2)
+```
+
+### MCMC
+
+Following does not run:
+```{r, eval=FALSE}
+x <- monteCarloStock(stk,sam,19,run.dir="run")
+```
+
+### Process error
+```{r, warning=FALSE}
+require(fishvise)
+rbya <- FLStock2rbya(ass)
+pro <- process_error_sam(rbya)
+ggplot(pro,aes(year,dm+m)) + geom_line() + facet_wrap(~ age) +
+  geom_hline(yintercept=0.2,col="red") +
+  labs(x="",y="")
+```
+
+## Results
+
+```{r}
+plot(sam)
+```
+
+### Comparison with the TRUTH :-)
+
+```{r}
+x <- melt(stock.n(sam),value.name = "n")[,c("year","age","n")]
+x <- join(x,melt(harvest(sam),value.name = "f")[,c("year","age","f")],by=c("year","age"))
+x$run <- "sam"
+x$n <- x$n/1e3
+truth <- read_adcam("~/ass/2014/01/05ass/Adcam","smb",rName = "truth",ggFactor = FALSE)$rbya
+cn <- c("year","age","n","f","run")
+x <- rbind(x[,cn],truth[truth$year %in% 1985:2014,cn])
+ggplot(x,aes(year,n/1e3,col=run)) + geom_line() +
+  facet_wrap(~ age,scale="free_y") +
+  theme(legend.position=c(0.8,0.1)) +
+  labs(x="",y="",title="Stock in numbers")
+ggplot(x,aes(year,f,col=run)) + geom_line() +
+  facet_wrap(~ age,scale="free_y") +
+  theme(legend.position=c(0.8,0.1)) +
+  labs(x="",y="",title="Fishing mortality")
+```
+
+```{r, results='asis'}
+sessionInfo()
+```
+
+## Tables
+```{r, results='asis', eval=FALSE}
+sam@control@sam.binary <- character()
+FLSAM.out(stk,tun,sam)
+```
