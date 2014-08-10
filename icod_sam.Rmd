@@ -106,8 +106,8 @@ ctr@logN.vars[]      <- c(1,rep(2,dims(stk)$age-1))
 ```{r, eval=FALSE}
 sam   <-  FLSAM(stk,tun,ctr,run.dir = "run")
 ```
-
 Note, if one is using the *flr FLSAM* repository, the above will give the following error (hence it is outcommented):
+In the above we get the following error (hence it is outcommented):
 ```
 Error in x@.Data[i, j, k, l, m, n] <- value : replacement has length zero
 Called from: `[<-`(`*tmp*`, a, , value = numeric(0))
@@ -123,6 +123,15 @@ FLSAM_run(stk,tun,ctr,run.dir="run")
 Note that the run.dir needs to be specified in the function above.
 
 The second function reads the results back into the *FLR*-environment (using some quick fix):
+```{r}
+source("R/FLSAM_amended.R")
+```
+Run the actual assessment:
+```{r, eval=FALSE}
+FLSAM_run(stk,tun,ctr,run.dir="run")
+```
+
+Now we read the data back into the *FLR*-environment (using some quick fix):
 ```{r, warning=FALSE}
 sam <- SAM2FLR_fix(ctrl=ctr,run.dir="run")
 # note, here we loose the 2014 data

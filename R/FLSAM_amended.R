@@ -34,7 +34,8 @@ FLSAM_run <-function(stck,tun,ctrl,run.dir=tempdir(),batch.mode=FALSE,pin.sam=NU
 }
 
 
-SAM2FLR_fix <-function(ctrl,admb.stem="sam",run.dir=tempdir()) {
+SAM2FLR_fix <-function(ctrl="missing",admb.stem="sam",run.dir=tempdir()) {
+
   #It may not always be possible to create a ctrl object e.g.
   #e.g. when trying to read the output of a model from
   #stockassessment.org. We start by adding some code to 
@@ -166,7 +167,7 @@ SAM2FLR_fix <-function(ctrl,admb.stem="sam",run.dir=tempdir()) {
   }
   
   #Extract the state variables
-  u <- subset(res@params,name=="U")
+  u<-subset(res@params,name=="U")
   stateEst<-matrix(u$value,nrow=res@n.states, byrow=FALSE,
                    dimnames=list(state=NULL,
                                  year=res@range["minyear"]:res@range["maxyear"]))
@@ -204,11 +205,8 @@ SAM2FLR_fix <-function(ctrl,admb.stem="sam",run.dir=tempdir()) {
                      run.date=Sys.time())
   res@info <- t(info)
   colnames(res@info) <- "_"
-
   levels(res@residuals$fleet) <- names(ctrl@fleets)
   
   #Finished! 
   return(res)
 }
-
-
